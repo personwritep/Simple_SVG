@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name        Simple SVG 🔵
 // @namespace        http://tampermonkey.net/
-// @version        1.2
-// @description        任意のブラウザ画面でpathコードを簡略化 ショートカット「F10」
+// @version        1.3
+// @description        任意のブラウザ画面でpathコードを簡略化　ショートカット「F10」
 // @author        Ameba Blog User
 // @match        https://*/*
 // @run-at        document-start
@@ -153,10 +153,10 @@ function main(){
     let dot3; // 💢 3dot連結のd値数
     let row_count; // コード1行の文字数
 
-    row_count=sessionStorage.getItem('SSVG')*1;
+    row_count=localStorage.getItem('SSVG')*1;
     if(!row_count){
         row_count=80; // 🔴🔴 ソースコード 1行文字数の初期値設定
-        sessionStorage.setItem('SSVG', row_count); }
+        localStorage.setItem('SSVG', row_count); }
 
 
     disp_reset();
@@ -861,7 +861,7 @@ function main(){
             function edit_row(row_set){
                 if(19<row_set && row_set<201){ // 文字数は 20～ 200
                     row_count=row_set;
-                    sessionStorage.setItem('SSVG', row_count);
+                    localStorage.setItem('SSVG', row_count);
                     let SSVG_pre=document.querySelector('.output_SSVG pre');
                     if(SSVG_pre){
                         SSVG_pre.textContent=output(Svg); }}}
