@@ -1,0 +1,851 @@
+// ==UserScript==
+// @name         Simple SVG
+// @namespace    http://tampermonkey.net/
+// @version       0.8
+// @description  任意のブラウザ画面でpathコードを簡略化　ｼﾖｰﾄｶｯﾄ「F10」
+// @author        Ameba Blog User
+// @match        https://*/*
+// @run-at        document-start
+// @grant         none
+// ==/UserScript==
+
+
+if(!location.hostname.includes('example.com')){
+    window.addEventListener('keydown', check_key);
+    function check_key(event){
+        if(event.keyCode==121){ // ショートカット「F10」
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            let win_apper='left=100, top=100, width=1024, height=800';
+            window.open('https://example.com/', null , win_apper); }}}
+
+
+if(location.hostname.includes('example.com')){
+    env();
+    main(); }
+
+
+function env(){
+    let head=document.head;
+    if(head){
+        let lang='<meta http-equiv="Content-Language" content="ja">';
+        head.insertAdjacentHTML('beforeend', lang);
+
+        let pre_style=head.querySelector('style');
+        if(pre_style){
+            pre_style.remove(); }}
+
+    let pre_div=document.querySelector('body > div');
+    if(pre_div){
+        pre_div.remove(); }}
+
+
+
+function main(){
+
+    let style=
+        'body { background: #000; } '+
+        '#base_board { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; '+
+        'z-index: 1; background: #000; } '+
+        '#base_board div { box-sizing: content-box; } '+
+        '#work_contena { position: fixed; top: 0; width: 100%; } '+
+        '#help { font: normal 16px Meiryo; padding: 4px 50px 0; height: 30px; '+
+        'margin: 20px 0 30px; color: #fff; background: #5a7582; white-space: nowrap; } '+
+        '#help .help_svg { vertical-align: -9px; cursor: pointer; } '+
+        '#help .help_svg:hover { filter: brightness(1.5); } '+
+        '#panel { display: flex; color: #fff; padding-left: 40px; } '+
+        '#help b, #panel b { display: inline-block; height: 22px; margin-right: 5px; '+
+        'padding: 0 6px; color: #000; background: #97d4f3; border-radius: 3px; } '+
+        '.p_count, .p_compress, .p_attr, .p_stroke, .p_style { font: normal 16px Meiryo; '+
+        'height: 24px; margin-right: 10px; padding: 12px 0 10px 10px; border: 1px solid #fff; } '+
+        '.p_compress t { font: normal 10px Meiryo; } '+
+        '.p_compress tt { display: inline-block; width: 215px; font: normal 16px Meiryo; } '+
+
+        '.p_count { width: 180px; flex-shrink: 0; white-space: nowrap; } '+
+        '.p_compress { width: 332px; min-width: 240px; padding-right: 10px; '+
+        'white-space: nowrap; overflow: hidden; } '+
+        '.p_attr { width: 103px; flex-shrink: 0; } '+
+        '.p_stroke { width: 124px; flex-shrink: 0; } '+
+        '.p_style { width: 112px; flex-shrink: 0; } '+
+
+        '.or_panel, .ne_panel { font: normal 16px Meiryo; '+
+        'position: absolute; top: 172px; color: #fff; } '+
+        '.or_panel { left: 8vw; } '+
+        '.ne_panel { left: 52vw; } '+
+        '.or, .ne { position: absolute; top: 200px; width: 40vw; height: 40vw; '+
+        'overflow: hidden; background: #fff; } '+
+        '.or { left: 8vw; } '+
+        '.ne { left: 52vw; } '+
+        '.file_input { display: none; }';
+
+
+    let help_SVG=
+        '<svg height="28" width="28" viewBox="0 0 210 220">'+
+        '<path d="M89 22C71 25 54 33 41 46C7 81 11 142 50 171C58 177 68 182 78 '+
+        '185C90 188 103 189 115 187C126 185 137 181 146 175C155 169 163 162 169 '+
+        '153C190 123 189 80 166 52C147 30 118 18 89 22z" style="fill: #97d4f3;"></path>'+
+        '<path d="M67 77C73 75 78 72 84 70C94 66 114 67 109 83C106 91 98 95 93 '+
+        '101C86 109 83 116 83 126L111 126C112 114 122 108 129 100C137 90 141 76 '+
+        '135 64C127 45 101 45 84 48C80 49 71 50 68 54C67 56 67 59 67 61L67 77M'+
+        '85 143L85 166L110 166L110 143L85 143z" style="fill:#000;"></path>'+
+        '</svg>';
+
+
+    let control=
+        '<div id="base_board">'+
+        '<div id="work_contena">'+
+        '<div id="help"><b>ESC</b>Simple SVG 終了　　<b>F8</b>画像コードの表示　　'+
+        '<b>F9</b>SVG画像の拡大表示　　<b>F10</b>SVG画像ファイルの読込み　　'+
+        '<a class="help_svg">'+ help_SVG +'</a></div>'+
+        '<div id="panel">'+
+        '<div class="p_count">　</div>'+
+        '<div class="p_compress">　</div>'+
+        '<div class="p_attr">　</div>'+
+        '<div class="p_stroke">　</div>'+
+        '<div class="p_style">　</div></div>'+
+        '<div class="or_panel">　デフォルト画像</div>'+
+        '<div class="ne_panel">　処理適用画像</div>'+
+        '<div class="or source"></div>'+
+        '<div class="ne source"></div>'+
+        '<input class="file_input" type="file">'+
+        '</div><style>' + style +'</style></div>';
+
+    document.body.insertAdjacentHTML('beforeend', control);
+
+
+    let withdraw=0; // キー入力の有効フラグ
+    let output_open=0; // 出力画面の表示フラグ
+    let end_open=0; // 終了画面の表示フラグ
+
+    let attr_mode=0; // 属性整理の有無
+    let stroke_mode=0;
+    let style_mode=0; // スタイル属性削除の有無
+    let mag=0; // 拡大指定の有無
+
+    let f_mode; // 四捨五入の処理形式
+    let dot2; // 💢
+    let dot3; // 💢
+    let row_count; // コード1行の文字数
+
+    row_count=sessionStorage.getItem('SSVG')*1;
+    if(!row_count){
+        row_count=80; // 🔴🔴 コード文字数の初期値設定
+        sessionStorage.setItem('SSVG', row_count); }
+
+
+
+    catch_key();
+
+    function catch_key(){
+
+        disp_reset();
+        help_link();
+
+        window.addEventListener('keydown', check_key);
+
+        function check_key(event){
+            if(event.keyCode==112 && withdraw==0){ // ショートカット「F1」
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                f_mode=1;
+                svg_arrange();
+                disp_result();
+                count_c(); } // 💢
+
+            if(event.keyCode==113 && withdraw==0){ // ショートカット「F2」
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                f_mode=2;
+                svg_arrange();
+                disp_result();
+                count_c(); } // 💢
+
+            if(event.keyCode==114 && withdraw==0){ // ショートカット「F3」
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                f_mode=3;
+                svg_arrange();
+                disp_result();
+                count_c(); } // 💢
+
+            if(event.keyCode==115 && withdraw==0){ // ショートカット「F4」
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                f_mode=4;
+                svg_arrange();
+                disp_result();
+                count_c(); } // 💢
+
+            if(event.keyCode==116 && withdraw==0){ // ショートカット「F5」
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if(attr_mode==0){
+                    attr_mode=1;
+                    if(f_mode==9){
+                        f_mode=4; }
+                    svg_arrange();
+                    disp_attr_mode();
+                    count_c(); }
+                else{
+                    attr_mode=0;
+                    if(f_mode==9){
+                        f_mode=4; }
+                    svg_arrange();
+                    disp_attr_mode();
+                    count_c(); }}
+
+            if(event.keyCode==117 && withdraw==0){ // ショートカット「F6」
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if(stroke_mode==0){
+                    stroke_mode=1;
+                    if(f_mode==9){
+                        f_mode=4; }
+                    svg_arrange();
+                    disp_stroke_mode();
+                    count_c(); }
+                else{
+                    stroke_mode=0;
+                    if(f_mode==9){
+                        f_mode=4; }
+                    svg_arrange();
+                    disp_stroke_mode();
+                    count_c(); }}
+
+            if(event.keyCode==118 && withdraw==0){ // ショートカット「F7」
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if(style_mode==0){
+                    style_mode=1;
+                    if(f_mode==9){
+                        f_mode=4; }
+                    svg_arrange();
+                    disp_style_mode();
+                    count_c(); }
+                else{
+                    style_mode=0;
+                    if(f_mode==9){
+                        f_mode=4; }
+                    svg_arrange();
+                    disp_style_mode();
+                    count_c(); }}
+
+            if(event.keyCode==119 && withdraw==0){ // ショートカット「F8」
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if(output_open==0){
+                    output_open=1;
+                    output_disp(); }
+                else{
+                    output_open=0;
+                    output_disp(); }}
+
+            if(event.keyCode==120 && withdraw==0){ // ショートカット「F9」
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if(mag==0){
+                    mag=1;
+                    mag_fit();
+                    center(); }
+                else{
+                    mag=0;
+                    mag_fit_off();
+                    center(); }}
+
+            if(event.keyCode==121 && withdraw==0){ // ショートカット「F10」
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                file_read(); }
+
+            if(event.keyCode==27){ // ショートカット「ESC」
+                if(end_open==0){
+                    end_open=1;
+                    end_work(); }
+                else{
+                    end_open=0;
+                    end_work(); }}
+
+        }} // catch_key()
+
+
+
+    function mag_fit(){
+        let view_div=document.querySelector('.or');
+        let width_or=view_div.getBoundingClientRect().width;
+
+        let style=
+            '<style class="mag">'+
+            '.source svg { width: '+ width_or +'px; height: auto; }</style>';
+        document.body.insertAdjacentHTML('beforeend', style); }
+
+
+    function mag_fit_off(){
+        if(document.querySelector('.mag')){
+            document.querySelector('.mag').remove(); }}
+
+
+    function center(){
+        let svg_img=document.querySelector('.or svg');
+        let svg_width=svg_img.getBoundingClientRect().width;
+        let svg_height=svg_img.getBoundingClientRect().height;
+        let style=
+            '<style class="mag_">'+
+            '.source svg { margin-left: calc(20vw - '+ svg_width/2 +'px); '+
+            'margin-top: calc(20vw - '+ svg_height/2 +'px); }</style>';
+
+        if(document.querySelector('.mag_')){
+            document.querySelector('.mag_').remove(); }
+        document.body.insertAdjacentHTML('beforeend', style); }
+
+
+
+    function set_svg(img){
+        let view_div=document.querySelector('.or');
+        if(view_div){
+            view_div.innerHTML=img;
+
+            let svg_img=document.querySelector('.or svg');
+            viewbox_add(svg_img); }} // viewBox属性を追加
+
+
+
+    function viewbox_add(Svg){
+        let viewbox=Svg.getAttribute("viewBox");
+        let width=Svg.getAttribute("width");
+        let height=Svg.getAttribute("height");
+        if(!viewbox && height && width){
+            let value='0 0 '+ width +' '+ height;
+            Svg.setAttribute("viewBox", value); } // viewBox属性を追加
+
+        Svg.removeAttribute("x"); // x値属性を削除
+        Svg.removeAttribute("y"); // x値属性を削除
+    } // viewbox_add()
+
+
+
+    function file_read(){
+        disp_reset();
+
+        let svg_ne=document.querySelector('.ne svg');
+        if(svg_ne){
+            svg_ne.remove(); } // 前処理のsvgを削除
+
+        let p_count=document.querySelector('.p_count');
+        if(p_count){
+            p_count.textContent='　'; } // 前処理の文字数カウントをリセット
+
+
+        let file_input=document.querySelector('.file_input');
+        if(file_input){
+            file_input.click();
+
+            file_input.addEventListener('change' , function(){
+                if(!(file_input.value)) return; // ファイルが選択されない場合
+                let file_list=file_input.files;
+                if(!file_list) return; // ファイルリストが選択されない場合
+                let file=file_list[0];
+                if(!file) return; // ファイルが無い場合
+
+                if(file.name.split('.').pop()=='svg'){ // ファイル名の確認
+                    let file_reader=new FileReader();
+                    file_reader.readAsText(file);
+                    file_reader.onload=function(){
+                        let data_in=file_reader.result;
+                        set_svg(data_in);
+                        center(); }}
+                else{
+                    alert(
+                        "❌　扱えるファイルではありません\n"+
+                        "　　 扱えるファイルは「.svg」ファイルです"); }
+            }); }}
+
+
+
+
+    function svg_arrange(){
+        dot2=0; // 💢
+        dot3=0; // 💢
+
+        let svg_or;
+        let path_or;
+        let svg_ne
+
+        svg_or=document.querySelector('.or svg'); // 処理元のSVG
+        let ne=document.querySelector('.ne');
+        if(svg_or && ne){ // 元のSVG画像が無いと動作しない
+
+            if(ne.querySelector('svg')){
+                ne.querySelector('svg').remove(); }
+            svg_ne=svg_or.cloneNode(true);
+            ne.appendChild(svg_ne);
+
+
+            if(attr_mode==1){
+                beautify(svg_ne); } // attr属性削除を実行
+
+            if(stroke_mode==1){
+                stroke_off(svg_ne); } // stroke属性削除を実行
+
+            if(style_mode==1){
+                style_off(svg_ne); } // style属性削除を実行
+
+
+
+            path_or=svg_ne.querySelectorAll('path'); // 処理元のSVGの全てのpath
+            for(let k=0; k<path_or.length; k++){
+                let d_or=path_or[k].getAttribute("d");
+                path_or[k].setAttribute("d", path_trim(d_or)); }
+
+            function path_trim(D_or){
+                let d_all=[];
+                if(select_type(D_or)){ // カンマ区切りの処理
+                    d_all=D_or.split(','); }
+                else{
+                    d_all=D_or.split(' '); }
+
+                if(f_mode<5){
+                    let temp_d;
+                    temp_d=d_all.join(' ');
+                    if(f_mode==4){
+                        return temp_d; } // 数値処理なしで出力
+                    else{
+                        return arrange_i_code(temp_d); }}
+
+
+
+                function arrange_i_code(Temp_d){ // path全体の処理
+                    let c_count=0; // 数として処理した文字数
+                    let i_code=[]; // 全pathを1文字ずつにした配列
+                    let i_code_new=[]; // 処理後の数と文字を格納する配列
+
+                    i_code=Temp_d.split(''); // pathの全体を文字1個ずつに分解
+                    for(let k=0; k<i_code.length; k++){
+                        if(i_code[k].match(/[A-Za-z]| |-/g)){
+                            if(c_count==0){
+                                i_code_new.push(i_code[k]); }
+                            else{
+                                i_code_new.push(arr_i_code(c_count, k));
+                                c_count=0; }}
+                        else{ // 数字または「.」の場合
+                            c_count+=1; }}
+
+                    return i_code_new.join(''); // 処理後のpath
+
+
+
+                    function arr_i_code(Count, K){
+                        let tmp=[];
+                        let tmp_num; // 再構成した数値（小数を含む）
+                        let tmp_round; // 四捨五入した数値
+                        for(let i=0; i<Count; i++){
+                            tmp.push(i_code[K-Count+i]); }
+
+
+                        if(count_dot(tmp)<2){ //「.」が1個以内
+                            if(count_dot(tmp)==1){
+                                tmp_num=parseFloat(tmp.join(''));
+                                if(f_mode==2 || f_mode==3){
+                                    if(tmp_num>=10 && f_mode==2){ // 🌐
+                                        tmp_round=Math.round(tmp_num); }
+                                    else{
+                                        tmp_round=(Math.round(tmp_num*10))/10; }}
+                                else{
+                                    tmp_round=Math.round(tmp_num); }}
+                            else if(count_dot(tmp)==0){
+                                tmp_round=parseInt(tmp.join('')); }
+
+                            return tmp_round.toString()+i_code[K]; }
+
+
+                        else if(count_dot(tmp)==2){ //「.」が2個
+                            dot2+=1; // 💢
+                            let sub_count=0;
+                            let sub_tmp1=[];
+                            let sub_tmp2=[];
+                            let tmp_num1;
+                            let tmp_num2;
+                            let r_tmp_num2;
+
+                            for(let i=0; i<tmp.length; i++){
+                                if(sub_count==0){
+                                    sub_tmp1.push(tmp[i]);
+                                    if(tmp[i]=="."){
+                                        sub_count=1; }}
+                                else if(sub_count==1){
+                                    if(tmp[i]!="."){
+                                        sub_tmp1.push(tmp[i]); }
+                                    if(tmp[i]=="."){
+                                        sub_count=2;
+                                        sub_tmp2.push(tmp[i]); }}
+                                else{
+                                    sub_tmp2.push(tmp[i]); }}
+
+                            tmp_num1=parseFloat(sub_tmp1.join(''));
+                            tmp_num2=parseFloat(sub_tmp2.join(''));
+                            r_tmp_num2=(Math.round(tmp_num2*10))/10;
+
+                            if(f_mode==2 || f_mode==3){
+                                if(r_tmp_num2<1 && r_tmp_num2!=0){
+                                    if(tmp_num1>=10 && f_mode==2){ // 🌐
+                                        return (Math.round(tmp_num1)).toString()+
+                                            ' '+r_tmp_num2.toString().slice(1)+
+                                            i_code[K]; }
+                                    else{
+                                        return ((Math.round(tmp_num1*10))/10).toString()+
+                                            ' '+r_tmp_num2.toString().slice(1)+
+                                            i_code[K]; }}
+                                else if(r_tmp_num2==0){
+                                    if(tmp_num1>=10 && f_mode==2){ // 🌐
+                                        return (Math.round(tmp_num1)).toString()+
+                                            ' 0'+i_code[K]; }
+                                    else{
+                                        return ((Math.round(tmp_num1*10))/10).toString()+
+                                            ' 0'+i_code[K]; }}
+                                else{
+                                    if(tmp_num1>10 && f_mode==2){ // 🌐
+                                        return (Math.round(tmp_num1)).toString()+
+                                            ' 1'+i_code[K]; }
+                                    else{
+                                        return ((Math.round(tmp_num1*10))/10).toString()+
+                                            ' 1'+i_code[K]; }}}
+
+                            else{
+                                if(r_tmp_num2<1 && r_tmp_num2!=0){
+                                    return (Math.round(tmp_num1)).toString()+
+                                        ' '+r_tmp_num2.toString().slice(1)+
+                                        i_code[K]; }
+                                else if(r_tmp_num2==0){
+                                    return (Math.round(tmp_num1)).toString()+
+                                        ' 0'+i_code[K]; }
+                                else{
+                                    return (Math.round(tmp_num1)).toString()+
+                                        ' 1'+i_code[K]; }}} // 桁上がりして1.0になる
+
+                        else{ //「.」が3個以上
+                            dot3+=1; // 💢
+                            return tmp.join('')+i_code[K]; }
+
+
+                        function count_dot(arr){
+                            let count=0;
+                            arr.forEach(function(item){
+                                if(item=='.'){
+                                    count+=1; }});
+                            return count; }
+
+                    } // arr_i_code
+                } // arrange_i_code()
+            } // path_trim
+        }} // svg_arrange()
+
+
+
+    function select_type(DD_or){
+        let regex=/,/;
+        return regex.test(DD_or); } // カンマ有り true / 無し false
+
+
+
+    function beautify(Svg){
+        Svg.removeAttribute("xmlns"); // xmlns属性を削除
+        Svg.removeAttribute("xml:space"); // xml:space属性を削除
+        Svg.removeAttribute("xmlns:xlink"); // xmlns:xlink属性を削除
+        Svg.removeAttribute("version"); // version属性を削除
+        Svg.removeAttribute("id"); // version属性を削除
+        Svg.removeAttribute("class"); // version属性を削除
+    } // beautify()
+
+
+
+    function stroke_off(Svg){
+        let path_or=Svg.querySelectorAll('path'); // 処理元のSVGの全てのpath
+        for(let k=0; k<path_or.length; k++){
+            let style_or=path_or[k].getAttribute("style");
+            if(style_or){
+                path_or[k].style.stroke=''; }}
+    } // stroke_off()
+
+
+
+    function style_off(Svg){
+        Svg.removeAttribute("style"); // style属性を削除
+    } // style_off()
+
+
+
+    function count_c(){
+        let svg1_c=0;
+        let svg2_c=0;
+        let svg_all=document.querySelectorAll('.source svg');
+        if(svg_all[0]){
+            svg1_c=svg_all[0].outerHTML.length; }
+        if(svg_all[1]){
+            svg2_c=svg_all[1].outerHTML.length; }
+
+        let p_count=document.querySelector('.p_count');
+        if(p_count){
+            p_count.textContent='文字数　'+svg1_c+' ▷ '+svg2_c; }
+
+        output_open=0; // コード出力パネルを閉じる
+        output_disp();
+
+    } // count_c()
+
+
+
+    function disp_attr_mode(){
+        let p_attr=document.querySelector('.p_attr');
+        if(p_attr){
+            if(attr_mode==1){
+                p_attr.innerHTML='<b>F5</b> Attr ⚪'; }
+            else{
+                p_attr.innerHTML='<b>F5</b> Attr ➖'; }}}
+
+
+
+    function disp_stroke_mode(){
+        let p_stroke=document.querySelector('.p_stroke');
+        if(p_stroke){
+            if(stroke_mode==1){
+                p_stroke.innerHTML='<b>F6</b> Stroke ⚪'; }
+            else{
+                p_stroke.innerHTML='<b>F6</b> Stroke ➖'; }}}
+
+
+
+    function disp_style_mode(){
+        let p_style=document.querySelector('.p_style');
+        if(p_style){
+            if(style_mode==1){
+                p_style.innerHTML='<b>F7</b> Style ⚪'; }
+            else{
+                p_style.innerHTML='<b>F7</b> Style ➖'; }}}
+
+
+
+    function disp_result(){
+        let p_compress=document.querySelector('.p_compress');
+        if(p_compress){
+            let mode_text='　';
+            if(f_mode==1){
+                mode_text='<b>F1</b><tt>S：通常の四捨五入</tt>'+
+                    '<t>Dot2 </t>'+dot2 +' <t>Dot3 </t>'+dot3; }
+            else if(f_mode==2){
+                mode_text='<b>F2</b><tt>M：10以下を小数第1位出力</tt>'+
+                    '<t>Dot2 </t>'+dot2 +' <t>Dot3 </t>'+dot3; }
+            else if(f_mode==3){
+                mode_text='<b>F3</b><tt>L：全数を小数第1位出力</tt>'+
+                    '<t>Dot2 </t>'+dot2 +' <t>Dot3 </t>'+dot3; }
+            else if(f_mode==4){
+                mode_text='<b>F4</b><tt>オリジナルのSVG画像</tt>'; }
+            else if(f_mode==9){
+                mode_text=
+                    '<b>F1</b>S　<b>F2</b>M　<b>F3</b>L　<b>F4</b>デフォルト'; }
+
+            p_compress.innerHTML=mode_text; }
+
+    } // disp_result()
+
+
+
+    function disp_reset(){
+        attr_mode=0;
+        disp_attr_mode();
+        stroke_mode=0;
+        disp_stroke_mode();
+        style_mode=0;
+        disp_style_mode();
+        f_mode=9;
+        disp_result();
+        output_open=0;
+        output_disp(); }
+
+
+    function help_link(){
+        let help_svg=document.querySelector('#help .help_svg');
+        if(help_svg){
+            let help_url='https://ameblo.jp/personwritep/entry-12794615989.html';
+            help_svg.setAttribute('href', help_url);
+            help_svg.setAttribute('target', '_blank');
+        }}
+
+
+
+    function output(Svg){
+        let svgString=Svg.outerHTML;
+
+        let stack=[];
+        findText(svgString); // タグ記号で区切る
+
+        for(let k=0; k<stack.length; k++){ // pathタグは入れ子にならないので纏める
+            if(stack[k].startsWith('<path') && stack[k+1]=='</path>'){
+                stack[k] +='</path>';
+                stack[k+1]=''; }}
+
+        stack=stack.filter(item=>{
+            return item!=''; });
+
+        for(let k=0; k<stack.length; k++){ // row_countの文字ずつの行に区切る
+            stack[k]=break_words(stack[k]); }
+
+        return stack.join('\n').slice(0, -1) +';'; // 繋いで末尾の「+」を「;」に変更
+
+
+        function findText(text){
+            for(let index=0; true;){
+                let s=text.indexOf('<', index); // index位置から検索
+                if(s==-1){ break; } // '<' を見つけたら後方の処理へ
+                let e=text.indexOf('>', s +1); // 発見した位置より後方の'>'を検索
+                if(e==-1){ break; } // '>' を見つけたら後方の処理へ
+                stack.push('<'+ text.substring(s +1, e) +'>'); // s e の位置を切出す
+                index=e +1; }
+            return stack; }
+
+
+        function break_words(source_code){
+            let s_arr=[];
+            for (let i=0; i<source_code.length; i+=row_count){ // コード1行の文字数の指定
+                s_arr.push(source_code.slice(i, i+row_count)); }
+
+            let new_s_arr=[];
+            for (let i=0; i<s_arr.length; i++){
+                let row="'"+ s_arr[i] +"'+";
+                new_s_arr.push(row); }
+
+            return new_s_arr.join('\n'); }
+
+    } // output()
+
+
+
+    function output_disp(){
+        if(output_open==1){
+            let Svg=document.querySelector('.ne svg');
+            if(Svg){
+                let panel=
+                    '<div class="output_SSVG">'+
+                    '<div class="out_control">'+
+                    '1行の文字数の指定： '+
+                    '<input class="row_n" type="number" min="20" max="200">　　'+
+                    'クリップボードに： <input class="out_copy" type="submit" value="Copy">'+
+                    '　　<input class="outpanel_close" type="submit" value="✖">'+
+                    '</div>'+
+                    '<pre></pre>'+
+                    '<style>'+
+                    '.output_SSVG { position: relative; top: 160px; margin: 0 auto;'+
+                    'font: normal 16px/20px Meiryo; width: fit-content; min-width: 600px; '+
+                    'background: #fff; border: 2px solid #2196f3; z-index: 4; } '+
+                    '.output_SSVG .out_control { padding: 6px 0 5px; text-align: center; '+
+                    'border-top: 1px solid #333; border-bottom: 1px solid #333; '+
+                    'background: #c7e5fc; } '+
+                    '.output_SSVG .out_control input { font: normal 16px/24px Meiryo; } '+
+                    '.row_n { width: 45px; padding: 2px 4px 0 12px; vertical-align: -1px; } '+
+                    '.outpanel_close { position: absolute; right: 25px; } '+
+                    '.output_SSVG pre { font: normal 16px/20px Meiryo; margin: 0; '+
+                    'padding: 30px 20px 30px 30px; max-height: calc(100vh - 340px); '+
+                    'overflow-y: scroll; } '+
+                    '</style></div>';
+
+                if(!document.querySelector('.output_SSVG')){
+                    document.body.insertAdjacentHTML('beforeend', panel); }
+
+                let output_SSVG_pre=document.querySelector('.output_SSVG pre');
+                if(output_SSVG_pre){
+                    output_SSVG_pre.textContent=output(Svg); }
+
+                outpanel_set(Svg);
+
+                let outpanel_close=document.querySelector('.outpanel_close');
+                if(outpanel_close){
+                    outpanel_close.onclick=()=>{
+                        if(document.querySelector('.output_SSVG')){
+                            document.querySelector('.output_SSVG').remove();
+                            output_open=0; }}}}}
+
+        if(output_open==0){
+            if(document.querySelector('.output_SSVG')){
+                document.querySelector('.output_SSVG').remove(); }}
+
+    } // output_disp()
+
+
+
+    function outpanel_set(Svg){
+        let row_n=document.querySelector('.row_n');
+        if(row_n){
+            row_n.value=row_count;
+            row_n.onchange=function(){
+                edit_row(row_n.value*1); }}
+
+        function edit_row(row_set){
+            if(19<row_set && row_set<201){ // 文字数は 20～ 200
+                row_count=row_set;
+                sessionStorage.setItem('SSVG', row_count);
+                let output_SSVG_pre=document.querySelector('.output_SSVG pre');
+                if(output_SSVG_pre){
+                    output_SSVG_pre.textContent=output(Svg); }}}
+
+        window.addEventListener('keydown', (event)=>{ // ⇧⇩キーで input にフォーカス
+            if(output_open==1){
+                if(event.keyCode==40 || event.keyCode==38){
+                    let row_n=document.querySelector('.row_n');
+                    if(row_n){
+                        row_n.focus(); }}}});
+
+
+        let out_copy=document.querySelector('.out_copy');
+        if(out_copy){
+            out_copy.onclick=function(){
+                copyToClipboard(output(Svg)); }
+
+            function copyToClipboard(value){
+                if(navigator.clipboard){ // navigator.clipboardが使えるか判定する
+                    return navigator.clipboard.writeText(value).then(function(){ // コピー
+                        out_copy.style.boxShadow='inset 0 0 0 20px #2196f350';
+                        out_copy.style.outline='2px solid #fff';
+                        setTimeout(()=>{
+                            out_copy.style.boxShadow='';
+                            out_copy.style.outline='';
+                        }, 1000);
+                    }); }}}
+
+    } // outpanel_set()
+
+
+
+    function end_work(){
+        if(end_open==1){
+            let panel=
+                '<div class="alert_SSVG">'+
+                '<p>このウインドウを閉じますが、｢F10」の待受け機能は全ての画面</p>'+
+                '<p>で動作をし続けます。　 SVG画像の処理を終了する場合は、必ず</p>'+
+                '<p>Tampermonkey のダッシュボードで Simple SVG を「OFF」</P>'+
+                '<p>にしてください。</p>'+
+                '<p class="alert_cont">'+
+                '<input class="close_win" type="submit" value="ウインドウを閉じる">　'+
+                '<input class="cancel_win" type="submit" value="キャンセル"></p>'+
+                '<style>.alert_SSVG { position: fixed; top: 160px; left: calc(50% - 380px); '+
+                'font: bold 20px/20px Meiryo; z-index: 5; padding: 20px 30px; '+
+                'color: #fff; background: #455A64; border: 4px solid #2196f3; } '+
+                '.alert_cont { text-align: right; padding-right: 50px; } '+
+                '.alert_SSVG input { font: normal 16px Meiryo; padding: 3px 6px 2px; } '+
+                '</style></div>';
+
+            if(!document.querySelector('.alert_SSVG')){
+                document.body.insertAdjacentHTML('beforeend', panel); }
+
+            document.querySelector('.close_win').onclick=()=>{
+                window.close(); }
+
+            document.querySelector('.cancel_win').onclick=()=>{
+                end_open=0;
+                document.querySelector('.alert_SSVG').remove(); }}
+
+        else if(end_open==0){
+            if(document.querySelector('.alert_SSVG')){
+                document.querySelector('.alert_SSVG').remove(); }}
+
+    } // end_work()
+
+} // main()
+
