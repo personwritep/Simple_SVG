@@ -1,0 +1,156 @@
+// ==UserScript==
+// @name          Simple SVG ⭐
+// @namespace  http://tampermonkey.net/
+// @version        0.1
+// @description  ブログ編集画面でpathコードを簡略化 実行キー「F1」
+// @author         Ameba Blog User
+// @match         https://blog.ameba.jp/ucs/entry/srventry*
+// @exclude       https://blog.ameba.jp/ucs/entry/srventrylist.do*
+// @grant          none
+// ==/UserScript==
+
+
+let retry=0;
+let interval=setInterval(wait_target, 100);
+function wait_target(){
+    retry++;
+    if(retry>10){ // リトライ制限 10回 1sec
+        clearInterval(interval); }
+    let target=document.getElementById('cke_1_contents'); // 監視 target
+    if(target){
+        clearInterval(interval);
+        main(); }}
+
+
+function main(){
+    let editor_iframe;
+    let iframe_doc;
+    let iframe_body;
+
+    let target=document.querySelector('#cke_1_contents');
+    let monitor=new MutationObserver( catch_key );
+    monitor.observe(target, {childList: true});
+
+    catch_key();
+
+    function catch_key(){
+        editor_iframe=document.querySelector('.cke_wysiwyg_frame');
+        if(editor_iframe){
+            iframe_doc=editor_iframe.contentWindow.document;
+            if(iframe_doc){
+
+                iframe_doc.addEventListener('keydown', check_key);
+                document.addEventListener('keydown', check_key);
+
+                function check_key(event){
+                    if(event.keyCode==112){ // ショートカット「F1」
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        clear_space();
+                        svg_arrange();
+                    }}}}
+
+    } // catch_key()
+
+
+
+    function svg_arrange(){
+        if(document.querySelector('.cke_wysiwyg_frame') !=null){ //「通常表示」から実行開始
+            editor_iframe=document.querySelector('.cke_wysiwyg_frame');
+            iframe_doc=editor_iframe.contentWindow.document;
+            if(iframe_doc){
+                let svg_or;
+                let width_or;
+                let height_or;
+                let path_or;
+                let d_or;
+
+                svg_or=iframe_doc.querySelector('.cke_editable svg');
+                if(svg_or){
+                    width_or=svg_or.getAttribute("width");
+                    height_or=svg_or.getAttribute("height"); }
+
+                path_or=iframe_doc.querySelector('.cke_editable path');
+                if(path_or){
+                    d_or=path_or.getAttribute("d");
+
+                    let d_all=d_or.split(' ');
+                    for(let k=0; k<d_all.length; k++){
+                        if(!d_all[k].match(/[-]/g)){
+                            if(d_all[k].match('C')){
+                                let d_c=d_all[k].split('C');
+                                if(d_c.length==2){
+                                    if(count_dot(d_c[0]) && count_dot(d_c[1])){
+                                        d_all[k]=Math.round(d_c[0]) +'C'+Math.round(d_c[1]); }}}
+                            if(d_all[k].match('M')){
+                                let d_m=d_all[k].split('M');
+                                if(d_m.length==2 && d_m[0]!=0){
+                                    if(count_dot(d_m[0]) && count_dot(d_m[1])){
+                                        d_all[k]=Math.round(d_m[0]) +'M'+Math.round(d_m[1]); }}}
+                            if(d_all[k].match('L')){
+                                let d_l=d_all[k].split('L');
+                                if(d_l.length==2){
+                                    if(count_dot(d_l[0]) && count_dot(d_l[1])){
+                                        d_all[k]=Math.round(d_l[0]) +'L'+Math.round(d_l[1]); }}}
+                            if(!d_all[k].match(/[A-Za-z]/g)){
+                                if(count_dot(d_all[k])){
+                                    d_all[k]=Math.round(d_all[k]); }}}}
+
+
+                    function count_dot(str){
+                        let count=0;
+                        for (let i=0; i<str.length; i++){
+                            if(str[i]=="."){
+                                count++; }}
+                        if(count<2){
+                            return true; }
+                        else{
+                            return false; }}
+
+
+                    let new_path=d_all.join(' ');
+                    add_svg(new_path, width_or, height_or);
+
+
+                    function add_svg(ex_path, width_, height_){
+                        let SVG=
+                            '<p>==================================</p>'+
+                            '<svg width="'+ width_ +'" height="'+ height_ +'" '+
+                            'class="output_svg"><path d="'+ ex_path + '"></path></svg>';
+
+                        let SVG_P=iframe_doc.createElement('p');
+                        SVG_P.id="svgp";
+
+                        let iframe_body=iframe_doc.querySelector('.cke_editable');
+                        if(iframe_body){
+                            if(iframe_body.querySelector('.output_svg')){
+                                iframe_body.querySelector('.output_svg').remove(); }
+                            iframe_body.appendChild(SVG_P);
+
+                            let SVGP=iframe_body.querySelector('#svgp');
+                            if(SVGP){
+                                SVGP.outerHTML=SVG; }}}
+
+                }}}} // svg_arrange()
+
+
+
+    function clear_space(){ // svgタグの後に増殖する空白行を削除
+        editor_iframe=document.querySelector('.cke_wysiwyg_frame');
+        if(editor_iframe){
+            iframe_doc=editor_iframe.contentWindow.document;
+            if(iframe_doc){
+                let iframe_body=iframe_doc.querySelector('.cke_editable');
+                if(iframe_body){
+                    let elements=iframe_body.querySelectorAll('p');
+                    for(let k=0; k<elements.length; k++){
+                        if(elements[k].childNodes.length=="1"){
+                            if(elements[k].firstElementChild){
+                                if(elements[k].firstElementChild.tagName=="BR"){
+                                    elements[k].remove(); }}}}
+                }}}} // clear_space()
+
+} // main()
+
+// ブログ記事にSVGをHTMLで書き込む
+// 通常表示に戻り「F1」を押すと、処理したSVGが追加される
