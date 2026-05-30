@@ -1,0 +1,194 @@
+// ==UserScript==
+// @name          Simple SVG ⭐
+// @namespace  http://tampermonkey.net/
+// @version        0.2
+// @description  編集画面でpathコードを簡略化 実行キー「F1」「F2」「F3」
+// @author         Ameba Blog User
+// @match         https://blog.ameba.jp/ucs/entry/srventry*
+// @exclude       https://blog.ameba.jp/ucs/entry/srventrylist.do*
+// @grant          none
+// ==/UserScript==
+
+
+let retry=0;
+let interval=setInterval(wait_target, 100);
+function wait_target(){
+    retry++;
+    if(retry>10){ // リトライ制限 10回 1sec
+        clearInterval(interval); }
+    let target=document.getElementById('cke_1_contents'); // 監視 target
+    if(target){
+        clearInterval(interval);
+        main(); }}
+
+
+function main(){
+    let editor_iframe;
+    let iframe_doc;
+    let iframe_body;
+    let f_mode; // 処理形式
+
+    let target=document.querySelector('#cke_1_contents');
+    let monitor=new MutationObserver( catch_key );
+    monitor.observe(target, {childList: true});
+
+    catch_key();
+
+    function catch_key(){
+        editor_iframe=document.querySelector('.cke_wysiwyg_frame');
+        if(editor_iframe){
+            iframe_doc=editor_iframe.contentWindow.document;
+            if(iframe_doc){
+
+                iframe_doc.addEventListener('keydown', check_key);
+                document.addEventListener('keydown', check_key);
+
+                function check_key(event){
+                    if(event.keyCode==112){ // ショートカット「F1」
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        f_mode=0;
+                        clear_space();
+                        svg_arrange(); }
+
+                    if(event.keyCode==113){ // ショートカット「F2」
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        f_mode=1;
+                        clear_space();
+                        svg_arrange(); }
+
+                    if(event.keyCode==114){ // ショートカット「F3」
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        f_mode=2;
+                        clear_space();
+                        svg_arrange(); }
+
+                }}}
+
+    } // catch_key()
+
+
+
+    function svg_arrange(){
+        if(document.querySelector('.cke_wysiwyg_frame') !=null){ //「通常表示」で実行
+            editor_iframe=document.querySelector('.cke_wysiwyg_frame');
+            iframe_doc=editor_iframe.contentWindow.document;
+            if(iframe_doc){
+                iframe_body=iframe_doc.querySelector('.cke_editable');
+                if(iframe_body){
+
+                    let svg_or;
+                    let path_or;
+                    let svg_n
+
+                    svg_or=iframe_doc.querySelector('.cke_editable svg');// 処理元のSVG
+                    if(svg_or){ // 元のSVG画像が無いと動作しない
+
+                        let line=iframe_doc.createElement('p');
+                        line.id='line';
+                        line.textContent=
+                            '=========================================';
+                        if(!iframe_body.querySelector('#line')){
+                            iframe_body.appendChild(line); }
+
+                        svg_n=svg_or.cloneNode(true);
+
+                        let svg_all=iframe_body.querySelectorAll('svg')
+                        for(let k=0; k<svg_all.length-1; k++){
+                            svg_all[k+1].remove(); } // 最初のSVG以降は削除
+                        iframe_body.appendChild(svg_n);
+
+                        path_or=svg_n.querySelectorAll('path'); // 処理元のSVGの全てのpath
+                        for(let k=0; k<path_or.length; k++){
+                            let d_or=path_or[k].getAttribute("d");
+                            path_or[k].setAttribute("d", path_trim(d_or)); }
+
+
+                        function path_trim(D_or){
+                            let d_all=[];
+                            if(f_mode==0){
+                                d_all=D_or.split(' '); }
+                            else if(f_mode==1 || f_mode==2){
+                                d_all=D_or.split(','); }
+
+                            if(f_mode==2){
+                                return d_all.join(' '); } // 処理後のpath出力
+
+
+                            if(f_mode==0 || f_mode==1){
+                                let temp_d;
+                                temp_d=d_all.join(' ');
+                                return arrange_i_code(temp_d); }
+
+
+                            function arrange_i_code(Temp_d){ // path全体の処理
+                                let c_count=0; // 数として処理した文字数
+                                let i_code=[]; // 全pathを1文字ずつにした配列
+                                let i_code_new=[]; // 処理後の数と文字を格納する配列
+
+                                i_code=Temp_d.split(''); // pathの全体を文字1個ずつに分解
+                                for(let k=0; k<i_code.length; k++){
+                                    if(i_code[k].match(/[A-Za-z]| |-/g)){
+                                        if(c_count==0){
+                                            i_code_new.push(i_code[k]); }
+                                        else{
+                                            i_code_new.push(arr_i_code(c_count, k));
+                                            c_count=0; }}
+                                    else{ // 数字または「.」の場合
+                                        c_count+=1; }}
+
+                                return i_code_new.join(''); // 処理後のpath
+
+
+                                function arr_i_code(Count, K){
+                                    let tmp=[];
+                                    let tmp_num; // 再構成した数値（小数を含む）
+                                    let tmp_round; // 四捨五入した数値
+                                    for(let i=0; i<Count; i++){
+                                        tmp.push(i_code[K-Count+i]); }
+
+                                    if(count_dot(tmp.join(''))){ //「.」が1個以内
+                                        tmp_num=parseFloat(tmp.join(''));
+                                        tmp_round=Math.round(tmp_num);
+                                        return tmp_round.toString()+i_code[K]; }
+                                    else{ //「.」が2個以上
+                                        return tmp.join('')+i_code[K]; }
+
+                                    function count_dot(str){
+                                        let count=0;
+                                        for (let i=0; i<str.length; i++){
+                                            if(str[i]=="."){
+                                                count++; }}
+                                        if(count<2){
+                                            return true; }
+                                        else{
+                                            return false; }}} // arr_i_code
+
+                            } // arrange_i_code()
+                        } // path_trim
+
+                    }}}}} // svg_arrange()
+
+
+
+    function clear_space(){ // svgタグの後に増殖する空白行を削除
+        editor_iframe=document.querySelector('.cke_wysiwyg_frame');
+        if(editor_iframe){
+            iframe_doc=editor_iframe.contentWindow.document;
+            if(iframe_doc){
+                let iframe_body=iframe_doc.querySelector('.cke_editable');
+                if(iframe_body){
+                    let elements=iframe_body.querySelectorAll('p');
+                    for(let k=0; k<elements.length; k++){
+                        if(elements[k].childNodes.length=="1"){
+                            if(elements[k].firstElementChild){
+                                if(elements[k].firstElementChild.tagName=="BR"){
+                                    elements[k].remove(); }}}}
+                }}}} // clear_space()
+
+} // main()
+
+// ブログ記事にSVGをHTMLで書き込む
+// 通常表示に戻り「F1」または「F2」を押すと、処理したSVGが追加される
