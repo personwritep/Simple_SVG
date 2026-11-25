@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Simple SVG 🔵
 // @namespace        http://tampermonkey.net/
-// @version        1.3
+// @version        1.4
 // @description        任意のブラウザ画面でpathコードを簡略化　ショートカット「F10」
 // @author        Ameba Blog User
 // @match        https://*/*
@@ -89,7 +89,11 @@ function main(){
         '.or { left: 8vw; } '+
         '.ne { left: 52vw; } '+
         '.or svg, .ne svg { align-self: center; } '+
-        '.file_input { display: none; }';
+        '.file_input { display: none; } '+
+
+        'body > P, body > svg, body>a { display: none; } '+
+        'svg { display: revert; margin: 0; opacity: 1; } ';
+
 
     let help_SVG=
         '<svg height="28" width="28" viewBox="0 0 210 220">'+
